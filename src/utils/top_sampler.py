@@ -78,6 +78,7 @@ class SamplingTop(object):
         pbar = tqdm(loader, desc='Scoring', leave=True)
         for iteration, batch in enumerate(pbar):
             input_, targets = batch['img'].to(device), batch['label']
+            print(">>>>>>", input_.shape)
             images = input_.squeeze(1).detach().cpu().numpy()*255
             targets, lengths = self.converter.encode(targets)
             logits = self.model(input_).transpose(1, 0)

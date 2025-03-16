@@ -26,17 +26,24 @@ class OCRTrainer(object):
         self.criterion = opt.criterion
         self.optimizer = opt.optimizer
         self.schedule = opt.schedule
-        self.alpha = opt.alpha
+        self.alpha = 1#opt.alpha
         self.converter = OCRLabelConverter(opt.alphabet)
         self.evaluator = Eval()
         print('Scheduling is {}'.format(self.schedule))
-        self.scheduler = STLR(self.optimizer, T_max=opt.epochs)
+        # self.scheduler = STLR(self.optimizer, T_max=opt.epochs)
+        self.scheduler = torch.optim.lr_scheduler.CyclicLR(
+                                                        self.optimizer,
+                                                        base_lr=1e-4,         # Lower bound of the learning rate
+                                                        max_lr=1e-3,          # Upper bound of the learning rate
+                                                        step_size_up=opt.epochs // 2,  # Number of epochs (or iterations) to increase the lr
+                                                        mode="triangular2"    # Cycle mode; "triangular2" scales the cycle by 2 each time
+                                                    )
         self.batch_size = opt.batch_size
         self.count = opt.epoch
         self.epochs = opt.epochs
         self.cuda = opt.cuda
         self.collate_fn = opt.collate_fn
-        self.noise = opt.noise
+        self.noise = 1#opt.noise
         self.init_meters()
 
     def init_meters(self):
@@ -92,6 +99,7 @@ class OCRTrainer(object):
             input_, targets_a, targets_b, lengths_a, lengths_b, lam = self.mixup_data(input_, targets, 
                 lengths, self.alpha)
         else:
+            
             input_, targets_a, targets_b, lengths_a, lengths_b, lam = self.mixup_data(input_, targets, 
                 lengths, 0)
         logits = self.forward(input_)

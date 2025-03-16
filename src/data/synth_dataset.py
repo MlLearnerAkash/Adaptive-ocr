@@ -21,7 +21,7 @@ class SynthDataset(Dataset):
         self.nSamples = len(self.images)
         f = lambda x: os.path.join(self.path, x)
         self.imagepaths = list(map(f, self.images))
-       	transform_list =  [transforms.Grayscale(1),
+        transform_list =  [transforms.Grayscale(1),
                             transforms.ToTensor(), 
                             transforms.Normalize((0.5,), (0.5,))]
         self.transform = transforms.Compose(transform_list)
