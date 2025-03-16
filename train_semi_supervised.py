@@ -21,6 +21,39 @@ from src.data.synth_dataset import  SynthCollator
 from src.criterions.ctc import CustomCTCLoss 
 from src.utils.top_sampler import SamplingTop
 from main import Learner
+from torch.utils.data import Dataset
+from PIL import Image
+import torchvision.transforms as transforms
+
+
+class SynthDataset(Dataset):
+    def __init__(self, opt):
+        super(SynthDataset, self).__init__()
+        self.path = os.path.join(opt.path, opt.imgdir)
+        self.images = os.listdir(self.path)
+        self.nSamples = len(self.images)
+        f = lambda x: os.path.join(self.path, x)
+        self.imagepaths = list(map(f, self.images))
+        transform_list =  [transforms.Grayscale(1),
+                            transforms.ToTensor(), 
+                            transforms.Normalize((0.5,), (0.5,))]
+        self.transform = transforms.Compose(transform_list)
+        self.collate_fn = SynthCollator()
+
+    def __len__(self):
+        return self.nSamples
+
+    def __getitem__(self, index):
+        assert index <= len(self), 'index range error'
+        imagepath = self.imagepaths[index]
+        imagefile = os.path.basename(imagepath)
+        img = Image.open(imagepath)
+        if self.transform is not None:
+            img = self.transform(img)
+        item = {'img': img, 'idx':index}
+        item['label'] = imagefile.split('_')[0]
+        return item 
+
 
 class LearnerSemi(Learner):
     def __init__(self, model, optimizer, savepath=None, resume=False):
@@ -79,12 +112,12 @@ if __name__ == '__main__':
     base_opts(parser)
     args = parser.parse_args()
     # Loading souce data
-    args.imgdir = 'English_consortium'
+    args.imgdir = 'lucida_calligraphy'
     args.source_data = SynthDataset(args)
     args.collate_fn = SynthCollator()
     # Loading target data an splitting 
     # into train and val
-    args.imgdir = 'English_unannotated'
+    args.imgdir = 'arial'
     target_data = SynthDataset(args)
     train_split = int(0.8*len(target_data))
     val_split = len(target_data) - train_split
