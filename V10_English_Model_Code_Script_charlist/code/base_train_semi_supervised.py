@@ -244,7 +244,7 @@ class BaseHTR(object):
             self.optimizer = optim.SGD(self.parameters, lr=self.opt.lr, momentum=self.opt.momentum)
 
         if self.opt.StepLR:
-            self.scheduler = StepLR(self.optimizer, step_size=20000, gamma=0.5)
+            self.scheduler = StepLR(self.optimizer, step_size=20, gamma=0.5)
         else:
             self.scheduler = None
         # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.00001, max_lr=0.001,
@@ -328,112 +328,17 @@ class BaseHTR(object):
     
 
 
-    # def eval_confidence(self, image_dir, target_dir, max_iter=np.inf, confidence_threshold=0.999):
-    #     import os, glob, shutil
-    #     import torch
-    #     from torch.autograd import Variable
-    #     import torch.nn.functional as F
-    #     import numpy as np
-    #     import pandas as pd
+ 
 
-    #     # Create a list of image file paths from the input directory (recursively)
-    #     image_extensions = ['*.png', '*.jpg', '*.jpeg', '*.bmp']
-    #     image_paths = []
-    #     for ext in image_extensions:
-    #         image_paths.extend(glob.glob(os.path.join(image_dir, '**', ext), recursive=True))
-        
-    #     if len(image_paths) == 0:
-    #         print("No images found in directory:", image_dir)
-    #         return None
-
-    #     # Create a custom dataset. It should return a dict that includes the image and its file path.
-    #     dataset1 = CustomImageDataset(image_paths, transform=self.test_transforms)
-        
-    #     # Create DataLoader
-    #     data_loader = torch.utils.data.DataLoader(dataset1, 
-    #                                                 batch_size=self.opt.batchSize,
-    #                                                 num_workers=int(self.opt.workers),
-    #                                                 pin_memory=True,
-    #                                                 collate_fn=dataset.collatedict(),  # assuming dataset provides its collate function
-    #                                                 drop_last=False)
-        
-    #     self.model.eval()
-    #     # This list will store tuples: (image_path, word_confidence, predicted_label)
-    #     image_confidences = []
-    #     iter_loader = iter(data_loader)
-        
-    #     # Run for max_iter iterations (or until the DataLoader is exhausted)
-    #     max_iter = min(max_iter, len(data_loader))
-        
-    #     with torch.no_grad():
-    #         for i in range(max_iter):
-    #             # Optionally print progress in test mode.
-    #             if self.opt.mode == 'test':
-    #                 print('%d / %d' % (i, len(data_loader)), end='\r')
-                
-    #             # Get next batch; assume that batch is a dict with keys including 'image' and 'image_path'
-    #             batch = next(iter_loader)
-    #             output_dict = self.forward_sample(batch)
-    #             batch_size = output_dict['batch_size']
-    #             preds = F.log_softmax(output_dict['probs'], 2)
-                
-    #             # Transpose and exponentiate predictions for confidence values
-    #             preds_transposed = torch.transpose(preds, 0, 1)
-    #             # 
-    #             preds_exp = torch.exp(preds_transposed)
-    #             # This operation returns a tuple (values, indices) and we only need the max values.
-    #             char_confidences, _ = torch.max(preds_exp, dim=2)  # shape: (batch_size, T)
-    #             # Compute the word-level confidence as the mean of character confidences along the time dimension.
-    #             word_confidences = torch.mean(char_confidences, dim=1)  # shape: (batch_size,)
-    #             preds_size = Variable(torch.IntTensor([preds.size(0)] * batch_size))
-                
-    #             # Decoder returns both the decoded predictions and the max-probability for each character
-    #             decoded_pred, max_probs = self.decoder(preds, preds_size)
-    #             # print("<<<<<<<<<<",max_probs)
-                
-    #             # For each image in the batch, compute the average confidence for the predicted word.
-    #             for j in range(batch_size):
-    #                 # Move to CPU and detach to work in numpy
-    #                 prob_tensor = word_confidences[j].cpu().detach()
-    #                 # print(">>>>>>", prob_tensor)
-    #                 # Take only nonzero values (if your confidence values are zero-padded)
-    #                 nonzero = prob_tensor[prob_tensor != 0.0]
-    #                 # print(">>>>>", nonzero)
-    #                 # if nonzero.numel() > 0:
-    #                 #     word_confidence = nonzero.float().mean().item()
-    #                 #     word_confidence = np.exp(word_confidence)
-    #                 # else:
-    #                 #     word_confidence = 0.0
-
-    #                 image_path = batch[1][j]
-    #                 image_confidences.append((image_path, prob_tensor, decoded_pred[j]))
-        
-    #     # Sort images by descending confidence
-    #     image_confidences.sort(key=lambda x: x[1], reverse=True)
-
-    #     # Ensure target directory exists.
-    #     if not os.path.exists(target_dir):
-    #         os.makedirs(target_dir)
-        
-    #     filtered_confidences = []
-    #     for (img_path, conf, pred) in image_confidences:
-    #         if conf > confidence_threshold:
-    #             filename = os.path.basename(img_path)
-    #             target_path = os.path.join(target_dir, filename)
-    #             filtered_confidences.append((img_path, pred, conf))
-        
-    #     df = pd.DataFrame(filtered_confidences, columns=['image_path', 'predicted_label', 'confidence'])
-      
-        
-    #     return df
-
-    def eval_confidence(self, image_dir, target_dir, max_iter=np.inf, confidence_threshold=0.999):
+    #NOTE: min-max thresh
+    def eval_confidence(self, image_dir, target_dir, max_iter=np.inf, max_conf=1.0, min_conf=0.7):
         import os, glob, shutil
         import torch
         from torch.autograd import Variable
         import torch.nn.functional as F
         import numpy as np
         import pandas as pd
+        import random
 
         # Create a list of image file paths from the input directory (recursively)
         image_extensions = ['*.png', '*.jpg', '*.jpeg', '*.bmp']
@@ -473,7 +378,7 @@ class BaseHTR(object):
                 # Get probabilities and decoded predictions
                 log_probs = F.log_softmax(output_dict['probs'], 2)
                 probs = torch.exp(log_probs)  # Convert to probabilities
-                preds_size = Variable(torch.IntTensor([log_probs.size(0)] * batch_size))
+                preds_size = torch.IntTensor([log_probs.size(0)] * batch_size)
                 decoded_pred, preds2 = self.decoder(log_probs, preds_size)
                 
                 # Calculate sequence probabilities for each sample in batch
@@ -487,7 +392,6 @@ class BaseHTR(object):
                     for t in range(log_probs.size(0)):  # Iterate through time steps
                         char_idx = path[t]
                         if char_idx != 0:  # Skip blank characters
-                            # Get probability at time t for predicted character
                             prob = probs[t, j, char_idx].item()
                             valid_probs.append(prob)
                     
@@ -503,131 +407,24 @@ class BaseHTR(object):
                     image_path = batch[1][j]
                     image_confidences.append((
                         image_path,
-                        torch.tensor(seq_probs[j]),  # Store as tensor for sorting
+                        torch.tensor(seq_probs[j]),  # Confidence stored as tensor
                         decoded_pred[j]
                     ))
         
-        # Sort images by descending confidence
-        image_confidences.sort(key=lambda x: x[1], reverse=True)
-
-        # Filter by confidence threshold
-        filtered_confidences = [
-            (img_path, pred, conf.item())  # Convert tensor to float
-            for (img_path, conf, pred) in image_confidences
-            if conf.item() > confidence_threshold
-        ]
-
-        if len(filtered_confidences) > 6000:
-            filtered_confidences = random.sample(filtered_confidences, 6000)
+        # Filter samples with confidence between 0.7 and 1.0
+        filtered_confidences = [sample for sample in image_confidences if min_conf <= sample[1].item() <= max_conf]
+        
+        # Randomly sample 6000 samples from the filtered list if needed
+        if len(filtered_confidences) > 10000:
+            filtered_confidences = random.sample(filtered_confidences, 10000)
         
         # Create DataFrame with proper confidence values
-        # df = pd.DataFrame(
-        #     [(img_path, pred, conf.item()) for (img_path, conf, pred) in filtered_confidences],
-        #     columns=['image_path', 'predicted_label', 'confidence']
-        # )
-        
-        
-        # Create DataFrame with proper confidence values
-        df = pd.DataFrame(filtered_confidences, 
-                        columns=['image_path', 'predicted_label', 'confidence'])
+        df = pd.DataFrame(
+            [(img_path, pred, conf.item()) for (img_path, conf, pred) in filtered_confidences],
+            columns=['image_path', 'predicted_label', 'confidence']
+        )
         
         return df
-
-    #NOTE: min-max thresh
-    # def eval_confidence(self, image_dir, target_dir, max_iter=np.inf, max_conf=1.0, min_conf=0.7):
-    #     import os, glob, shutil
-    #     import torch
-    #     from torch.autograd import Variable
-    #     import torch.nn.functional as F
-    #     import numpy as np
-    #     import pandas as pd
-    #     import random
-
-    #     # Create a list of image file paths from the input directory (recursively)
-    #     image_extensions = ['*.png', '*.jpg', '*.jpeg', '*.bmp']
-    #     image_paths = []
-    #     for ext in image_extensions:
-    #         image_paths.extend(glob.glob(os.path.join(image_dir, '**', ext), recursive=True))
-        
-    #     if len(image_paths) == 0:
-    #         print("No images found in directory:", image_dir)
-    #         return None
-
-    #     # Create a custom dataset
-    #     dataset1 = CustomImageDataset(image_paths, transform=self.test_transforms)
-        
-    #     # Create DataLoader
-    #     data_loader = torch.utils.data.DataLoader(dataset1, 
-    #                                             batch_size=self.opt.batchSize,
-    #                                             num_workers=int(self.opt.workers),
-    #                                             pin_memory=True,
-    #                                             collate_fn=dataset.collatedict(),
-    #                                             drop_last=False)
-        
-    #     self.model.eval()
-    #     image_confidences = []
-    #     iter_loader = iter(data_loader)
-    #     max_iter = min(max_iter, len(data_loader))
-        
-    #     with torch.no_grad():
-    #         for i in range(max_iter):
-    #             if self.opt.mode == 'test':
-    #                 print('%d / %d' % (i, len(data_loader)), end='\r')
-                
-    #             batch = next(iter_loader)
-    #             output_dict = self.forward_sample(batch)
-    #             batch_size = output_dict['batch_size']
-                
-    #             # Get probabilities and decoded predictions
-    #             log_probs = F.log_softmax(output_dict['probs'], 2)
-    #             probs = torch.exp(log_probs)  # Convert to probabilities
-    #             preds_size = torch.IntTensor([log_probs.size(0)] * batch_size)
-    #             decoded_pred, preds2 = self.decoder(log_probs, preds_size)
-                
-    #             # Calculate sequence probabilities for each sample in batch
-    #             seq_probs = []
-    #             for j in range(batch_size):
-    #                 # Get the predicted path for this sample
-    #                 path = preds2[j].cpu().numpy()  # [time_steps,]
-                    
-    #                 # Collect probabilities along the decoded path (excluding blanks)
-    #                 valid_probs = []
-    #                 for t in range(log_probs.size(0)):  # Iterate through time steps
-    #                     char_idx = path[t]
-    #                     if char_idx != 0:  # Skip blank characters
-    #                         prob = probs[t, j, char_idx].item()
-    #                         valid_probs.append(prob)
-                    
-    #                 # Calculate average probability for non-blank characters
-    #                 if valid_probs:
-    #                     seq_prob = sum(valid_probs) / len(valid_probs)
-    #                 else:
-    #                     seq_prob = 0.0
-    #                 seq_probs.append(seq_prob)
-                
-    #             # Store results with path-based confidence
-    #             for j in range(batch_size):
-    #                 image_path = batch[1][j]
-    #                 image_confidences.append((
-    #                     image_path,
-    #                     torch.tensor(seq_probs[j]),  # Confidence stored as tensor
-    #                     decoded_pred[j]
-    #                 ))
-        
-    #     # Filter samples with confidence between 0.7 and 1.0
-    #     filtered_confidences = [sample for sample in image_confidences if min_conf <= sample[1].item() <= max_conf]
-        
-    #     # Randomly sample 6000 samples from the filtered list if needed
-    #     if len(filtered_confidences) > 6000:
-    #         filtered_confidences = random.sample(filtered_confidences, 6000)
-        
-    #     # Create DataFrame with proper confidence values
-    #     df = pd.DataFrame(
-    #         [(img_path, pred, conf.item()) for (img_path, conf, pred) in filtered_confidences],
-    #         columns=['image_path', 'predicted_label', 'confidence']
-    #     )
-        
-    #     return df
 
 
 
@@ -648,22 +445,22 @@ class BaseHTR(object):
             if epoch%2==0:
                 if self.opt.type=="semi":
                     accumulated_confident_samples = pd.DataFrame()
-                    semi_images_dir = self.opt.source_imgs_dir #"/home/akash/ws/limited_supervision_ocr/synthetic_data_gen/datasets/train/lucida_sorted_files.txt"
-                    label_txt_file = self.opt.source_labels_dir #"/home/akash/ws/limited_supervision_ocr/synthetic_data_gen/datasets/train/train_word_labels.txt"
-                    target_dir = self.opt.target_imgs_dir #"/home/akash/ws/limited_supervision_ocr/synthetic_data_gen/datasets/large_data/tmp"
+                    semi_images_dir = self.opt.source_imgs_dir 
+                    label_txt_file = self.opt.source_labels_dir 
+                    target_dir = self.opt.target_imgs_dir 
                     lmdb_dir = self.opt.lmdb_dir
 
                     
-                    # df = self.eval_confidence(image_dir=target_dir,
-                    #                         target_dir=target_dir,
-                    #                         max_conf=max_conf,
-                    #                         min_conf=min_conf)
                     df = self.eval_confidence(image_dir=target_dir,
                                             target_dir=target_dir,
-                                            confidence_threshold=0.99)
+                                            max_conf=max_conf,
+                                            min_conf=min_conf)
+                    # df = self.eval_confidence(image_dir=target_dir,
+                    #                         target_dir=target_dir,
+                    #                         confidence_threshold=0.99)
                     #stop-word
                     # Drop rows where the predicted label equals "the"
-                    df = df[df["predicted_label"] != "the"]
+                    # df = df[df["predicted_label"] != "the"]
 
                     if accumulated_confident_samples.empty:
                         accumulated_confident_samples = df
@@ -694,7 +491,7 @@ class BaseHTR(object):
             while i < len(self.train_loader):
                 start_time1 = time.time()
                 i+=1
-                if i<230:
+                if i<23:
                     continue
                 if (epoch) % self.opt.valInterval == 0:
                     valloss, val_CER, val_WER = self.eval(self.test_data, max_iter=self.val2_iter)
@@ -779,14 +576,16 @@ class BaseHTR(object):
         val_preds = []
         max_probs = []
         val_iter = iter(data_loader)
+
         tc = 0
         wc = 0
         ww = 0
         tw = 0
         cw = 0
+        
         loss_avg = utils.averager()
         #NOTE: change to 10 die to lack of time//CAREFUL
-        max_iter = 10#min(max_iter, len(data_loader))
+        max_iter = min(max_iter, len(data_loader))
         with torch.no_grad():
             for i in range(max_iter):
                 if self.opt.mode == 'test':
@@ -795,7 +594,7 @@ class BaseHTR(object):
                 batch_size = output_dict['batch_size']
                 preds = F.log_softmax(output_dict['probs'], 2)
                 ##########################################################
-                #print("preds==>", preds)# probability of each charcter
+                # print("preds==>", preds.shape)# probability of each charcter
                 preds1 = torch.transpose(preds, 0, 1)
                 preds1 = torch.exp(preds1)
                 preds_size = Variable(torch.IntTensor([preds.size(0)] * batch_size))

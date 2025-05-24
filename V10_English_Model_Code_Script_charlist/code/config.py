@@ -70,7 +70,7 @@ parser.add_argument('--val2_iter', type=int, default=np.inf, help='Number of val
 
 parser.add_argument('--lr', type=float, default=0.00001, help='learning rate for Critic, not used by adadealta')
 parser.add_argument('--beta1', type=float, default=0.00005, help='beta1 for adam. default=0.5')
-parser.add_argument('--momentum', type=float, default=0.09, help='momentum for sgd')
+parser.add_argument('--momentum', type=float, default=0.099, help='momentum for sgd')
 parser.add_argument('--adam', action='store_true', help='Whether to use adam (default is rmsprop)')
 parser.add_argument('--adadelta', action='store_true', help='Whether to use adadelta (default is rmsprop)')
 parser.add_argument('--StepLR', action='store_true', help='Whether to use scheduler')
