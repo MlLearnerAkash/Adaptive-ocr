@@ -442,7 +442,7 @@ class BaseHTR(object):
         min_conf = 0.8
         for epoch in range(self.opt.nepoch+1):
 
-            if epoch%2==0:
+            if epoch%2 ==0:
                 if self.opt.type=="semi":
                     accumulated_confident_samples = pd.DataFrame()
                     semi_images_dir = self.opt.source_imgs_dir 
@@ -455,12 +455,6 @@ class BaseHTR(object):
                                             target_dir=target_dir,
                                             max_conf=max_conf,
                                             min_conf=min_conf)
-                    # df = self.eval_confidence(image_dir=target_dir,
-                    #                         target_dir=target_dir,
-                    #                         confidence_threshold=0.99)
-                    #stop-word
-                    # Drop rows where the predicted label equals "the"
-                    # df = df[df["predicted_label"] != "the"]
 
                     if accumulated_confident_samples.empty:
                         accumulated_confident_samples = df
