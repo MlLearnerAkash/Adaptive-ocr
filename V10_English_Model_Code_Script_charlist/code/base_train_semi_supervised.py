@@ -236,7 +236,6 @@ class BaseHTR(object):
         if self.opt.adam:
             self.optimizer = optim.Adam(self.parameters, lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
         elif self.opt.adadelta:
-            print(">>>>>>>", opt.lr)
             self.optimizer = optim.Adadelta(self.parameters, lr=self.opt.lr)#, weight_decay = 0.001
         elif self.opt.rmsprop:
             self.optimizer = optim.RMSprop(self.parameters, lr=self.opt.lr)
@@ -341,13 +340,20 @@ class BaseHTR(object):
         import random
 
         # Create a list of image file paths from the input directory (recursively)
-        image_extensions = ['*.png', '*.jpg', '*.jpeg', '*.bmp']
+        image_extensions = ('.png', '.jpg', '.jpeg', '.bmp')
         image_paths = []
-        for ext in image_extensions:
-            image_paths.extend(glob.glob(os.path.join(image_dir, '**', ext), recursive=True))
+        # for ext in image_extensions:
+        #     image_paths.extend(glob.glob(os.path.join(image_dir, '**', ext), recursive=True))
         
+        # if len(image_paths) == 0:
+        #     print("No images found in directory:", image_dir)
+        #     return None
+
+        with open(image_dir, 'r') as f:
+            image_paths = [line.strip() for line in f if line.strip().lower().endswith(image_extensions)]
+
         if len(image_paths) == 0:
-            print("No images found in directory:", image_dir)
+            print("No images found in file:", image_dir)
             return None
 
         # Create a custom dataset
@@ -442,7 +448,7 @@ class BaseHTR(object):
         min_conf = 0.8
         for epoch in range(self.opt.nepoch+1):
 
-            if epoch%2 ==0:
+            if epoch%100 ==0:
                 if self.opt.type=="semi":
                     accumulated_confident_samples = pd.DataFrame()
                     semi_images_dir = self.opt.source_imgs_dir 
