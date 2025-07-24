@@ -1,0 +1,6 @@
+outs:
+- md5: 43380e4575bb0220602fdebaf1f7a414.dir
+  size: 1227309056
+  nfiles: 6
+  hash: md5
+  path: lmdbs
