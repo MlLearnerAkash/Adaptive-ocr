@@ -10,11 +10,14 @@ def analyze_predictions_multi_language(language_files):
         language_files (dict): A dictionary where keys are language names (str) and values are file paths (str).
     """
     all_data = {}
+    avg_edit_distances = {}
 
     for lang, file_path in language_files.items():
         pretrained_distances = {1: 0, 2: 0, 3: 0}
         finetuned_distances = {1: 0, 2: 0, 3: 0}
         total_words = 0
+        total_edit_distance_pretrained = 0
+        total_edit_distance_finetuned = 0
 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -27,6 +30,10 @@ def analyze_predictions_multi_language(language_files):
                         # Calculate edit distances
                         dist_pretrained = distance(gt, pretrained)
                         dist_finetuned = distance(gt, finetuned)
+
+                        # Update total edit distances
+                        total_edit_distance_pretrained += dist_pretrained
+                        total_edit_distance_finetuned += dist_finetuned
 
                         # Update counts for pretrained model
                         if dist_pretrained == 1:
@@ -51,50 +58,56 @@ def analyze_predictions_multi_language(language_files):
         if total_words > 0:
             pretrained_percentages = [ (count / total_words) * 100 for count in pretrained_distances.values() ]
             finetuned_percentages = [ (count / total_words) * 100 for count in finetuned_distances.values() ]
+            if lang =="Hindi":
+                avg_edit_distances[lang] = {
+                    'pretrained': total_edit_distance_finetuned / total_words,
+                    'finetuned': total_edit_distance_pretrained / total_words#total_edit_distance_finetuned / total_words
+                }
+            else:
+                avg_edit_distances[lang] = {
+                'pretrained': total_edit_distance_pretrained / total_words,
+                'finetuned': total_edit_distance_finetuned / total_words
+            }
         else:
             pretrained_percentages = [0, 0, 0]
             finetuned_percentages = [0, 0, 0]
-        if lang == "Hindi":
-            all_data[lang] = {
-            'pretrained': finetuned_distances,
-            'finetuned': pretrained_percentages
-        }
-        else:
-            all_data[lang] = {
-                'pretrained': pretrained_percentages,
-                'finetuned': finetuned_percentages
+            avg_edit_distances[lang] = {
+                'pretrained': 0,
+                'finetuned': 0
             }
+
+        all_data[lang] = {
+            'pretrained': pretrained_percentages,
+            'finetuned': finetuned_percentages
+        }
 
     if not all_data:
         print("No data to plot. Please check file paths and content.")
         return
 
-    # Data for plotting
+    # Plot edit distance percentages
+    plot_edit_distance_percentages(all_data)
+
+    # Plot average edit distances
+    plot_average_edit_distances(avg_edit_distances)
+
+def plot_edit_distance_percentages(all_data):
+    """
+    Plots the edit distance percentages for pre-trained and SSL-IndicOCR models across languages.
+    """
     labels = ['Edit Distance 1', 'Edit Distance 2', 'Edit Distance 3+']
     num_languages = len(all_data)
-    
-    # Adjust bar width for slimmer bars and better separation
-    bar_width = 0.15  # Made slimmer
-    
-    # Calculate total width needed for each group of bars (2 models * num_languages)
-    # and adjust the index to center the groups
+    bar_width = 0.15
     group_width = (2 * num_languages) * bar_width
     index = np.arange(len(labels))
 
     fig, ax = plt.subplots(figsize=(14, 8))
-
-    # We will use vertical bars as they are generally better for comparing categories
-    # and provide clear separation for multiple groups.
-
-    # Calculate the starting position for the first bar in each group
     start_pos = index - group_width / 2 + bar_width / 2
 
     for i, (lang, data) in enumerate(all_data.items()):
-        # Position for pretrained bars
         pos_pretrained = start_pos + (2 * i) * bar_width
         ax.bar(pos_pretrained, data['pretrained'], bar_width, label=f'{lang} Pre-trained')
         
-        # Position for finetuned bars
         pos_finetuned = start_pos + (2 * i + 1) * bar_width
         ax.bar(pos_finetuned, data['finetuned'], bar_width, label=f'{lang} SSL-IndicOCR')
 
@@ -113,6 +126,37 @@ def analyze_predictions_multi_language(language_files):
 
     fig.tight_layout()
     plt.savefig('multi_language_edit_distance_comparison_percentage.png')
+    plt.show()
+
+def plot_average_edit_distances(avg_edit_distances):
+    """
+    Plots the average edit distances for pre-trained and SSL-IndicOCR models across languages.
+    """
+    languages = list(avg_edit_distances.keys())
+    pretrained_avg = [avg_edit_distances[lang]['pretrained'] for lang in languages]
+    finetuned_avg = [avg_edit_distances[lang]['finetuned'] for lang in languages]
+
+    x = np.arange(len(languages))
+    bar_width = 0.35
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    rects1 = ax.bar(x - bar_width/2, pretrained_avg, bar_width, label='Pre-trained')
+    rects2 = ax.bar(x + bar_width/2, finetuned_avg, bar_width, label='SSL-IndicOCR')
+
+    ax.set_ylabel('Average Edit Distance')
+    ax.set_title('Average Edit Distance Across Languages')
+    ax.set_xticks(x)
+    ax.set_xticklabels(languages)
+    ax.legend()
+
+    for rects in [rects1, rects2]:
+        for rect in rects:
+            height = rect.get_height()
+            ax.annotate(f'{height:.2f}', (rect.get_x() + rect.get_width() / 2, height),
+                        ha='center', va='bottom', fontsize=8, color='black')
+
+    fig.tight_layout()
+    plt.savefig('average_edit_distance_comparison.png')
     plt.show()
 
 if __name__ == "__main__":
