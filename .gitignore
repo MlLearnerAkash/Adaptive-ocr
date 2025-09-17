@@ -1,0 +1,15 @@
+data_hi/
+data_kannada/
+data_tel/
+data_pb/
+ocr_code/*
+mlruns
+evaluation/
+synthetic_data_gen/
+text_processor/
+output/
+/test.ved
+/data_kannada
+/text_processor
+/Adapting-OCR
+data_bn/
